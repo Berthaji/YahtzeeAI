@@ -206,17 +206,17 @@ def play(agent, game, n_games):
 if __name__ == "__main__":
     n_states = 19  # 5 dadi, 1 tiri rimasti, 13 righe completate
     n_actions = 18  # 15 azioni di rilancio, 3 azioni di selezione riga
-    n_games = 100  
+    n_games = 100
 
     # Creazione dell'agente e caricamento del modello
     agent = DQN(
             n_states=n_states, 
             n_actions=n_actions,
             batch_size=128, 
-            learning_rate=5e-4,
+            learning_rate=1e-3,
             gamma=0.9, 
-            learn_step=5, 
-            mem_size=int(1e5), 
+            learn_step=2, 
+            mem_size=int(1e6), 
             tau=1e-3
     )
     agent.net_eval.load_state_dict(torch.load(CHECKPOINT_NAME, map_location=device, weights_only=True))

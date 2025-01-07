@@ -4,15 +4,16 @@ from train import train
 
 n_states = 19  # 5 dadi, 1 tiri rimasti, 13 righe completate
 n_actions = 18  # 15 azioni di rilancio, 3 azioni di selezione riga
+n_actions_alt=45
 
 # agente DQN
 agent = DQN(n_states=n_states, 
             n_actions=n_actions,
             batch_size=128, 
-            learning_rate=5e-4,
-            gamma=0.9, 
-            learn_step=5, 
-            mem_size=int(1e5), 
+            learning_rate=1e-3,
+            gamma=0.8, 
+            learn_step=2, 
+            mem_size=int(1e6), 
             tau=1e-3)
 
 # Parametri di training
@@ -21,7 +22,7 @@ max_steps = 52  # Numero massimo di passi per episodio
 eps_start = 1.0  # Epsilon iniziale
 eps_end = 0.01  # Epsilon finale
 eps_decay = 0.995  # Decadimento di epsilon
-target_score = 180  # Punteggio target per terminare l'addestramento (punteggio medio su ultimi 100 episodi)
+target_score = 200  # Punteggio target per terminare l'addestramento (punteggio medio su ultimi 100 episodi)
 game = YahtzeeGame()
 
 
