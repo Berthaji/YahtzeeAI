@@ -104,7 +104,7 @@ class ReplayBuffer:
     @param tau Fattore per l'aggiornamento della rete obiettivo.
 """
 class DQN:
-    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.4, mem_size=int(1e5), tau=1e-3):
+    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.9, mem_size=int(1e5), tau=1e-3):
         self.n_states = n_states
         self.n_actions = n_actions
         self.batch_size = batch_size
