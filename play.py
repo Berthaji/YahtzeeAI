@@ -4,9 +4,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from yahtzee_api import YahtzeeGame
 
-device = torch.device("cpu")    # pytorch non supporta l'accelerazione GPU su apple silicon
-print(f"Using device: {device}")
+CHECKPOINT_NAME = 'checkpoint_yahtzee.pth'
+device = torch.device("cpu") 
+
 
 """
     @class QNet
@@ -33,11 +35,10 @@ class QNet(nn.Module):
 
     def forward(self, x):
         return self.fc(x)
+    
 
 
-
-
-
+    
 """
     @class ReplayBuffer
     @brief Buffer di esperienza per l'addestramento del Deep Q-Learning.
@@ -78,33 +79,31 @@ class ReplayBuffer:
     
 
 
-
-
 """
-    @class DQN
-    @brief Classe principale per l'implementazione dell'agente Deep Q-Network.
-    La classe DQN implementa l'agente di reinforcement learning basato sull'algoritmo 
-    Deep Q-Learning.
-    - @c net_eval: La rete di valutazione, che apprende la funzione Q.
-    - @c net_target: La rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
+@class DQN
+@brief Classe principale per l'implementazione dell'agente Deep Q-Network.
+La classe DQN implementa l'agente di reinforcement learning basato sull'algoritmo 
+Deep Q-Learning.
+- @c net_eval: La rete di valutazione, che apprende la funzione Q.
+- @c net_target: La rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
 
-    @note
-    L'agente utilizza un buffer di replay per memorizzare le esperienze e 
-    campionarle durante l'addestramento. La classe offre metodi per selezionare
-    azioni (@c getAction), memorizzare esperienze (@c save2Memory), e aggiornare 
-    i parametri delle reti (@c learn e @c targetUpdate).
+@note
+L'agente utilizza un buffer di replay per memorizzare le esperienze e 
+campionarle durante l'addestramento. La classe offre metodi per selezionare
+azioni (@c getAction), memorizzare esperienze (@c save2Memory), e aggiornare 
+i parametri delle reti (@c learn e @c targetUpdate).
 
-    @param n_states Numero di variabili di stato (dimensione dello stato di input).
-    @param n_actions Numero di azioni possibili (dimensione dell'output della rete).
-    @param batch_size Dimensione del batch usato durante l'addestramento.
-    @param learning_rate Tasso di apprendimento.
-    @param learn_step Numero di passi tra due aggiornamenti della rete.
-    @param gamma Fattore di sconto per i futuri reward.
-    @param mem_size Dimensione massima del replay buffer.
-    @param tau Fattore per l'aggiornamento della rete obiettivo.
+@param n_states Numero di variabili di stato (dimensione dello stato di input).
+@param n_actions Numero di azioni possibili (dimensione dell'output della rete).
+@param batch_size Dimensione del batch usato durante l'addestramento.
+@param learning_rate Tasso di apprendimento.
+@param learn_step Numero di passi tra due aggiornamenti della rete.
+@param gamma Fattore di sconto per i futuri reward.
+@param mem_size Dimensione massima del replay buffer.
+@param tau Fattore per l'aggiornamento della rete obiettivo.
 """
 class DQN:
-    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.4, mem_size=int(1e5), tau=1e-3):
+    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=0.99, learn_step=5, gamma=0.4, mem_size=int(1e5), tau=1e-3):
         self.n_states = n_states
         self.n_actions = n_actions
         self.batch_size = batch_size
@@ -162,3 +161,66 @@ class DQN:
             target_param.data.copy_(
                 self.tau * eval_param.data + (1.0 - self.tau) * target_param.data
             )
+
+
+"""
+    Gioca a Yahtzee per un numero specifico di partite e stampa i risultati.
+
+    @param agent: Agente pre-addestrato.
+    @param game: Oggetto di gioco Yahtzee.
+    @param n_games: Numero di partite da giocare.
+    @return: Lista dei punteggi ottenuti in ciascuna partita.
+"""
+def play(agent, game, n_games):
+    scores = []
+
+    for game_index in range(n_games):
+        game.newGame()  # nuova partita
+        state = np.array(game.getDiceValues() + [game.rollLeft()] + game.completed_rows, dtype=np.float32)
+        total_score = 0
+
+        while not game.hasFinished():
+            action = agent.getAction(state, epsilon=0.0)  # sfruttamento
+
+            if game.rollLeft() == 0:  # Se i tiri sono finiti, si seleziona una riga
+                available_rows = [i for i, completed in enumerate(game.completed_rows) if not completed]
+                if not available_rows:
+                    break  # Non ci sono righe disponibili
+                row_index = available_rows[0]
+                row_name = list(game.scorecard.keys())[row_index]
+                game.chooseRow(row_name)
+            else:
+                game.chooseAction(action)
+
+            total_score = game.getTotalReward()
+            state = np.array(game.getDiceValues() + [game.rollLeft()] + game.completed_rows, dtype=np.float32)
+
+        scores.append(total_score)
+        print(f"Partita {game_index + 1}/{n_games} - Punteggio: {total_score}")
+
+    average_score = np.mean(scores)
+    print(f"\nPunteggio medio su {n_games} partite: {average_score}")
+    return scores
+
+
+if __name__ == "__main__":
+    n_states = 19  # 5 dadi, 1 tiri rimasti, 13 righe completate
+    n_actions = 18  # 15 azioni di rilancio, 3 azioni di selezione riga
+    n_games = 500  
+
+    # Creazione dell'agente e caricamento del modello
+    agent = DQN(
+            n_states=n_states, 
+            n_actions=n_actions,
+            batch_size=64, 
+            learning_rate=1e-4,
+            gamma=0.99, 
+            learn_step=5, 
+            mem_size=int(1e5), 
+            tau=1e-3
+    )
+    agent.net_eval.load_state_dict(torch.load(CHECKPOINT_NAME, map_location=device, weights_only=True))
+    agent.net_eval.eval()
+
+    game = YahtzeeGame()
+    play(agent, game, n_games)
