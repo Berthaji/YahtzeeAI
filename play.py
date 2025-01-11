@@ -4,23 +4,26 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from yahtzee_api import YahtzeeGame
+from api import YahtzeeGame, ACTION_INDEX_LIMIT
 
-CHECKPOINT_NAME = 'checkpoint_yahtzee.pth'
-device = torch.device("cpu") 
+MODEL_NAME = 'yahtzee_model.pth'
+device = torch.device("cpu")
+# In ordine, le classi QNet, Replay Buffer e DQN, per l'implementazione dell'agente.
+# Implementata una funzione fetch_actions per impedire all'agente di scegliere azioni non valide.
+# Implementazione funzione play per l'esecuzione di N partite alla riga 199.
+# Entry point per l'esecuzione alla riga 249.
 
 
 """
     @class QNet
-    @brief Rete neurale per il Deep Q-Learning.
-    La classe QNet implementa una rete neurale completamente connessa progettata per 
-    apprendere la funzione Q. Questa funzione stima i valori Q per ciascuna azione 
-    possibile dato uno stato di input.
+    @brief Rete neurale per il Q-Learning.
+    Implementa una rete neurale completamente connessa pensata per 
+    apprendere la funzione Q.
 
-    @note La rete è composta da tre livelli:
-        - Un livello di input che accetta il vettore stato (n_state_vars).
-        - Due livelli nascosti con attivazione ReLU per catturare le relazioni non lineari.
-        - Un livello di output che restituisce i valori Q per tutte le azioni (n_actions).
+    @note È composta dai seguenti livelli:
+        - Un livello di input che accetta il vettore degli stati.
+        - Due livelli nascosti con attivazione ReLU.
+        - Un livello di output che restituisce i Q-values per tutte le azioni.
 """
 class QNet(nn.Module):
     def __init__(self, n_state_vars, n_actions, dim_hidden=64):
@@ -35,16 +38,14 @@ class QNet(nn.Module):
 
     def forward(self, x):
         return self.fc(x)
-    
 
 
-    
+
 """
     @class ReplayBuffer
-    @brief Buffer di esperienza per l'addestramento del Deep Q-Learning.
-
-    La classe ReplayBuffer implementa una struttura dati per memorizzare e gestire 
-    le esperienze raccolte durante l'apprendimento.
+    @brief Buffer di esperienza per il training nel Q-Learning.
+    Implementa una struttura dati per memorizzare e gestire 
+    le esperienze raccolte durante il training.
 
     @details
     Ogni esperienza memorizzata è rappresentata da un namedtuple "Experience":
@@ -52,7 +53,7 @@ class QNet(nn.Module):
     - @c action: L'azione eseguita.
     - @c reward: La ricompensa ricevuta.
     - @c next_state: Lo stato successivo risultante dall'azione.
-    - @c done: booleano che indica se l'episodio è terminato.
+    - @c done: Flag che indica se l'episodio è terminato.
 """
 class ReplayBuffer:
     def __init__(self, n_actions, memory_size, batch_size):
@@ -79,37 +80,39 @@ class ReplayBuffer:
     
 
 
+
 """
-@class DQN
-@brief Classe principale per l'implementazione dell'agente Deep Q-Network.
-La classe DQN implementa l'agente di reinforcement learning basato sull'algoritmo 
-Deep Q-Learning.
-- @c net_eval: La rete di valutazione, che apprende la funzione Q.
-- @c net_target: La rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
+    @class DQN
+    @brief Classe principale per l'implementazione dell'agente di reinforcement learning
+    sulla base del concetto di Q-Learning.
+    - @c net_eval: Rete principale, che apprende la funzione Q.
+    - @c net_target: Rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
 
-@note
-L'agente utilizza un buffer di replay per memorizzare le esperienze e 
-campionarle durante l'addestramento. La classe offre metodi per selezionare
-azioni (@c getAction), memorizzare esperienze (@c save2Memory), e aggiornare 
-i parametri delle reti (@c learn e @c targetUpdate).
+    @notem La classe include i seguenti metodi:
+    - @c getAction: Selezione di un'azione.
+    - @c save2Memory: Memorizzazione delle esperienze.
+    - @c learn: Aggiornamento dei parametri della rete.
+    - @c targetUpdate: Aggiornamento dei parametri della rete obiettivo.
 
-@param n_states Numero di variabili di stato (dimensione dello stato di input).
-@param n_actions Numero di azioni possibili (dimensione dell'output della rete).
-@param batch_size Dimensione del batch usato durante l'addestramento.
-@param learning_rate Tasso di apprendimento.
-@param learn_step Numero di passi tra due aggiornamenti della rete.
-@param gamma Fattore di sconto per i futuri reward.
-@param mem_size Dimensione massima del replay buffer.
-@param tau Fattore per l'aggiornamento della rete obiettivo.
+    @param n_states: Numero di variabili di stato (dimensione dello stato di input).
+    @param n_actions: Numero di azioni possibili (dimensione dell'output della rete).
+    @param batch_size: Dimensione del batch usato durante l'addestramento.
+    @param learning_rate: Tasso di apprendimento.
+    @param learn_step: Numero di passi tra due aggiornamenti della rete.
+    @param gamma: Fattore di sconto per i futuri reward.
+    @param mem_size: Dimensione massima del replay buffer.
+    @param tau: Fattore per l'aggiornamento della rete obiettivo.
+    @param device: Dispositivo di esecuzione ("cpu" su Apple Silicon).
 """
 class DQN:
-    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=0.99, learn_step=5, gamma=0.4, mem_size=int(1e5), tau=1e-3):
+    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.9, mem_size=int(1e5), tau=1e-3, device=device):
         self.n_states = n_states
         self.n_actions = n_actions
         self.batch_size = batch_size
         self.gamma = gamma
         self.learn_step = learn_step
         self.tau = tau
+        self.device = device
 
         self.net_eval = QNet(n_states, n_actions).to(device)
         self.net_target = QNet(n_states, n_actions).to(device)
@@ -119,19 +122,23 @@ class DQN:
         self.memory = ReplayBuffer(n_actions, mem_size, batch_size)
         self.counter = 0
 
-    def getAction(self, state, epsilon):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-
-        self.net_eval.eval()
-        with torch.no_grad():
-            action_values = self.net_eval(state)
-        self.net_eval.train()
-
+    def getAction(self, state, epsilon, actions):
         if random.random() < epsilon:
-            action = random.choice(np.arange(self.n_actions))
+        # Scelta casuale tra le azioni (esplorazione)
+            return random.choice(actions)
         else:
-            action = np.argmax(action_values.cpu().data.numpy())
-        return action
+            # Calcolo Q-values (sfruttamento)
+            state = torch.tensor(state, dtype=torch.float).unsqueeze(0).to(self.device)
+            self.net_eval.eval()
+            with torch.no_grad():
+                q_values = self.net_eval(state)[0]  # tensore dei Q-values
+            self.net_eval.train()
+
+            # Filtra per le azioni valide
+            valid_q_values = [(action, q_values[action]) for action in actions] # coppie (azione – Q-value)
+            best_action, _ = max(valid_q_values, key=lambda x: x[1]) # azione con Q-value massimo
+
+            return best_action
 
     def save2Memory(self, state, action, reward, next_state, done):
         self.memory.add(state, action, reward, next_state, done)
@@ -163,63 +170,99 @@ class DQN:
             )
 
 
-"""
-    Gioca a Yahtzee per un numero specifico di partite e stampa i risultati.
 
-    @param agent: Agente pre-addestrato.
-    @param game: Oggetto di gioco Yahtzee.
-    @param n_games: Numero di partite da giocare.
-    @return: Lista dei punteggi ottenuti in ciascuna partita.
+"""
+    @brief Restituisce le azioni valide che l'agente può compiere, in base allo stato corrente del gioco.
+
+    @param game: Oggetto che rappresenta il gioco.
+
+    @return Un elenco di azioni valide:
+    - Se i tiri sono finiti (rollLeft() == 0), ritorna un elenco delle righe non ancora completate.
+    - Se ci sono tiri rimasti, ritorna un intervallo per le azioni di rilancio.
+    - None, se non ci sono azioni valide.
+"""
+def fetch_actions(game):
+    if game.rollLeft() == 0:
+        valid_rows = []
+        for i, row in enumerate(game.scorecard.keys()):
+            if game.scorecard[row] is None:
+                valid_rows.append(i + ACTION_INDEX_LIMIT)
+        
+        # Se non ci sono righe valide, restituisce None
+        return valid_rows if valid_rows else None
+    
+    # Intervallo per le azioni di rilancio
+    return [i for i in range(ACTION_INDEX_LIMIT)]
+
+
+
+"""
+    @brief Esecuzione di N partite di Yahtzee utilizzando il modello addestrato, con stampa del
+    punteggio di ogni partita e la media.
+    
+    @param agent L'agente utilizzato durante il gioco.
+    @param game L'oggetto che rappresenta il gioco.
+    @param n_games Il numero di partite da giocare.
+    
+    @note l'agente utilizza la politica appresa senza esplorazione (solo sfruttamento).
+    Se non ci sono azioni valide, la partita termina.
 """
 def play(agent, game, n_games):
-    scores = []
+    score_list = [] 
 
     for game_index in range(n_games):
-        game.newGame()  # nuova partita
+        game.newGame()  # Nuova partita
         state = np.array(game.getDiceValues() + [game.rollLeft()] + game.completed_rows, dtype=np.float32)
         total_score = 0
 
         while not game.hasFinished():
-            action = agent.getAction(state, epsilon=0.0)  # sfruttamento
 
-            if game.rollLeft() == 0:  # Se i tiri sono finiti, si seleziona una riga
-                available_rows = [i for i, completed in enumerate(game.completed_rows) if not completed]
-                if not available_rows:
-                    break  # Non ci sono righe disponibili
-                row_index = available_rows[0]
-                row_name = list(game.scorecard.keys())[row_index]
-                game.chooseRow(row_name)
-            else:
-                game.chooseAction(action)
+            # azioni valide 
+            valid_actions = fetch_actions(game)
 
-            total_score = game.getTotalReward()
-            state = np.array(game.getDiceValues() + [game.rollLeft()] + game.completed_rows, dtype=np.float32)
+            if not valid_actions:
+                print("Partita terminata. Nessuna azione valida disponibile.")
+                break
 
-        scores.append(total_score)
+            # Scelta dell'azione
+            action = agent.getAction(state, epsilon=0.0, actions=valid_actions)
+            game.chooseAction(action)
+            reward = float(game.getLastReward())
+            next_state = np.array(game.getDiceValues() + [game.rollLeft()] + game.completed_rows, dtype=np.float32)
+
+            state = next_state
+            total_score += reward
+
+            if game.hasFinished():
+                break
+
+        # Store del punteggio della partita
+        score_list.append(total_score)
         print(f"Partita {game_index + 1}/{n_games} - Punteggio: {total_score}")
 
-    average_score = np.mean(scores)
+    # Media dei punteggi
+    average_score = np.mean(score_list)
     print(f"\nPunteggio medio su {n_games} partite: {average_score}")
-    return scores
+
 
 
 if __name__ == "__main__":
-    n_states = 19  # 5 dadi, 1 tiri rimasti, 13 righe completate
-    n_actions = 18  # 15 azioni di rilancio, 3 azioni di selezione riga
-    n_games = 100
+    n_states = 19 
+    n_actions = 45  
+    n_games = 500
 
     # Creazione dell'agente e caricamento del modello
     agent = DQN(
             n_states=n_states, 
             n_actions=n_actions,
             batch_size=128, 
-            learning_rate=1e-3,
+            learning_rate=1e-4,
             gamma=0.9, 
-            learn_step=2, 
+            learn_step=5, 
             mem_size=int(1e6), 
             tau=1e-3
     )
-    agent.net_eval.load_state_dict(torch.load(CHECKPOINT_NAME, map_location=device, weights_only=True))
+    agent.net_eval.load_state_dict(torch.load(MODEL_NAME, map_location=device, weights_only=True))
     agent.net_eval.eval()
 
     game = YahtzeeGame()

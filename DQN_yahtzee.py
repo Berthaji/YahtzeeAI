@@ -10,15 +10,14 @@ print(f"Using device: {device}")
 
 """
     @class QNet
-    @brief Rete neurale per il Deep Q-Learning.
-    La classe QNet implementa una rete neurale completamente connessa progettata per 
-    apprendere la funzione Q. Questa funzione stima i valori Q per ciascuna azione 
-    possibile dato uno stato di input.
+    @brief Rete neurale per il Q-Learning.
+    Implementa una rete neurale completamente connessa pensata per 
+    apprendere la funzione Q.
 
-    @note La rete è composta da tre livelli:
-        - Un livello di input che accetta il vettore stato (n_state_vars).
-        - Due livelli nascosti con attivazione ReLU per catturare le relazioni non lineari.
-        - Un livello di output che restituisce i valori Q per tutte le azioni (n_actions).
+    @note È composta dai seguenti livelli:
+        - Un livello di input che accetta il vettore degli stati.
+        - Due livelli nascosti con attivazione ReLU.
+        - Un livello di output che restituisce i Q-values per tutte le azioni.
 """
 class QNet(nn.Module):
     def __init__(self, n_state_vars, n_actions, dim_hidden=64):
@@ -36,14 +35,11 @@ class QNet(nn.Module):
 
 
 
-
-
 """
     @class ReplayBuffer
-    @brief Buffer di esperienza per l'addestramento del Deep Q-Learning.
-
-    La classe ReplayBuffer implementa una struttura dati per memorizzare e gestire 
-    le esperienze raccolte durante l'apprendimento.
+    @brief Buffer di esperienza per il training nel Q-Learning.
+    Implementa una struttura dati per memorizzare e gestire 
+    le esperienze raccolte durante il training.
 
     @details
     Ogni esperienza memorizzata è rappresentata da un namedtuple "Experience":
@@ -51,7 +47,7 @@ class QNet(nn.Module):
     - @c action: L'azione eseguita.
     - @c reward: La ricompensa ricevuta.
     - @c next_state: Lo stato successivo risultante dall'azione.
-    - @c done: booleano che indica se l'episodio è terminato.
+    - @c done: Flag che indica se l'episodio è terminato.
 """
 class ReplayBuffer:
     def __init__(self, n_actions, memory_size, batch_size):
@@ -79,38 +75,38 @@ class ReplayBuffer:
 
 
 
-
 """
     @class DQN
-    @brief Classe principale per l'implementazione dell'agente Deep Q-Network.
-    La classe DQN implementa l'agente di reinforcement learning basato sull'algoritmo 
-    Deep Q-Learning.
-    - @c net_eval: La rete di valutazione, che apprende la funzione Q.
-    - @c net_target: La rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
+    @brief Classe principale per l'implementazione dell'agente di reinforcement learning
+    sulla base del concetto di Q-Learning.
+    - @c net_eval: Rete principale, che apprende la funzione Q.
+    - @c net_target: Rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
 
-    @note
-    L'agente utilizza un buffer di replay per memorizzare le esperienze e 
-    campionarle durante l'addestramento. La classe offre metodi per selezionare
-    azioni (@c getAction), memorizzare esperienze (@c save2Memory), e aggiornare 
-    i parametri delle reti (@c learn e @c targetUpdate).
+    @notem La classe include i seguenti metodi:
+    - @c getAction: Selezione di un'azione.
+    - @c save2Memory: Memorizzazione delle esperienze.
+    - @c learn: Aggiornamento dei parametri della rete.
+    - @c targetUpdate: Aggiornamento dei parametri della rete obiettivo.
 
-    @param n_states Numero di variabili di stato (dimensione dello stato di input).
-    @param n_actions Numero di azioni possibili (dimensione dell'output della rete).
-    @param batch_size Dimensione del batch usato durante l'addestramento.
-    @param learning_rate Tasso di apprendimento.
-    @param learn_step Numero di passi tra due aggiornamenti della rete.
-    @param gamma Fattore di sconto per i futuri reward.
-    @param mem_size Dimensione massima del replay buffer.
-    @param tau Fattore per l'aggiornamento della rete obiettivo.
+    @param n_states: Numero di variabili di stato (dimensione dello stato di input).
+    @param n_actions: Numero di azioni possibili (dimensione dell'output della rete).
+    @param batch_size: Dimensione del batch usato durante l'addestramento.
+    @param learning_rate: Tasso di apprendimento.
+    @param learn_step: Numero di passi tra due aggiornamenti della rete.
+    @param gamma: Fattore di sconto per i futuri reward.
+    @param mem_size: Dimensione massima del replay buffer.
+    @param tau: Fattore per l'aggiornamento della rete obiettivo.
+    @param device: Dispositivo di esecuzione ("cpu" su Apple Silicon).
 """
 class DQN:
-    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.9, mem_size=int(1e5), tau=1e-3):
+    def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.9, mem_size=int(1e5), tau=1e-3, device=device):
         self.n_states = n_states
         self.n_actions = n_actions
         self.batch_size = batch_size
         self.gamma = gamma
         self.learn_step = learn_step
         self.tau = tau
+        self.device = device
 
         self.net_eval = QNet(n_states, n_actions).to(device)
         self.net_target = QNet(n_states, n_actions).to(device)
@@ -120,19 +116,23 @@ class DQN:
         self.memory = ReplayBuffer(n_actions, mem_size, batch_size)
         self.counter = 0
 
-    def getAction(self, state, epsilon):
-        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
-
-        self.net_eval.eval()
-        with torch.no_grad():
-            action_values = self.net_eval(state)
-        self.net_eval.train()
-
+    def getAction(self, state, epsilon, actions):
         if random.random() < epsilon:
-            action = random.choice(np.arange(self.n_actions))
+        # Scelta casuale tra le azioni (esplorazione)
+            return random.choice(actions)
         else:
-            action = np.argmax(action_values.cpu().data.numpy())
-        return action
+            # Calcolo Q-values (sfruttamento)
+            state = torch.tensor(state, dtype=torch.float).unsqueeze(0).to(self.device)
+            self.net_eval.eval()
+            with torch.no_grad():
+                q_values = self.net_eval(state)[0]  # tensore dei Q-values
+            self.net_eval.train()
+
+            # Filtra per le azioni valide
+            valid_q_values = [(action, q_values[action]) for action in actions] # coppie (azione – Q-value)
+            best_action, _ = max(valid_q_values, key=lambda x: x[1]) # azione con Q-value massimo
+
+            return best_action
 
     def save2Memory(self, state, action, reward, next_state, done):
         self.memory.add(state, action, reward, next_state, done)

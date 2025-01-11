@@ -1,31 +1,34 @@
-from yahtzee_api import YahtzeeGame 
+from api import YahtzeeGame 
 from DQN_yahtzee import DQN
 from train import train
+import torch
 
 n_states = 19  # 5 dadi, 1 tiri rimasti, 13 righe completate
-n_actions = 18  # 15 azioni di rilancio, 3 azioni di selezione riga
-n_actions_alt=45
+n_actions = 45  # tutte le azioni possibili
+device = torch.device("cpu")
 
-# agente DQN
+
+
 agent = DQN(n_states=n_states, 
             n_actions=n_actions,
             batch_size=128, 
-            learning_rate=1e-3,
-            gamma=0.8, 
-            learn_step=2, 
+            learning_rate=1e-4,
+            gamma=0.9, 
+            learn_step=5, 
             mem_size=int(1e6), 
-            tau=1e-3)
+            tau=1e-3,
+            device=device)
 
 # Parametri di training
-n_episodes = 60000  # Numero di episodi per l'addestramento
+n_episodes = 2000  # Numero massimo di episodi
 max_steps = 52  # Numero massimo di passi per episodio
-eps_start = 1.0  # Epsilon iniziale
-eps_end = 0.01  # Epsilon finale
-eps_decay = 0.995  # Decadimento di epsilon
-target_score = 200  # Punteggio target per terminare l'addestramento (punteggio medio su ultimi 100 episodi)
+epsilon_start = 1.0  # Epsilon iniziale
+epsilon_end = 0.01  # Epsilon finale
+epsilon_decay = 0.99  # Decadimento (epsilon-greedy policy)
+target_score = 150  # Punteggio target per terminare l'addestramento (punteggio medio su ultimi 100 episodi)
 game = YahtzeeGame()
 
 
 scores = train(
-    game, agent, n_episodes, max_steps, eps_start, eps_end, 
-    eps_decay, target_score, store_checkpoint=True)
+    agent, game, n_episodes, max_steps, target_score, epsilon_start, epsilon_end, 
+    epsilon_decay, save_model=True)
