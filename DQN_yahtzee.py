@@ -8,18 +8,15 @@ import torch.optim as optim
 device = torch.device("cpu")    # pytorch non supporta l'accelerazione GPU su apple silicon
 print(f"Using device: {device}")
 
-"""
-    @class QNet
-    @brief Rete neurale per il Q-Learning.
-    Implementa una rete neurale completamente connessa pensata per 
-    apprendere la funzione Q.
-
-    @note È composta dai seguenti livelli:
-        - Un livello di input che accetta il vettore degli stati.
-        - Due livelli nascosti con attivazione ReLU.
-        - Un livello di output che restituisce i Q-values per tutte le azioni.
-"""
 class QNet(nn.Module):
+    """
+        Implementa una rete neurale completamente connessa progettata per apprendere la funzione Q.
+
+        La rete è composta dai seguenti livelli:
+            - Un livello di input che accetta il vettore degli stati.
+            - Due livelli nascosti con attivazione ReLU.
+            - Un livello di output che restituisce i Q-values per tutte le azioni.
+    """
     def __init__(self, n_state_vars, n_actions, dim_hidden=64):
         super(QNet, self).__init__()
         self.fc = nn.Sequential(
@@ -35,21 +32,19 @@ class QNet(nn.Module):
 
 
 
-"""
-    @class ReplayBuffer
-    @brief Buffer di esperienza per il training nel Q-Learning.
-    Implementa una struttura dati per memorizzare e gestire 
-    le esperienze raccolte durante il training.
 
-    @details
-    Ogni esperienza memorizzata è rappresentata da un namedtuple "Experience":
-    - @c state: Lo stato corrente.
-    - @c action: L'azione eseguita.
-    - @c reward: La ricompensa ricevuta.
-    - @c next_state: Lo stato successivo risultante dall'azione.
-    - @c done: Flag che indica se l'episodio è terminato.
-"""
 class ReplayBuffer:
+    """
+        Buffer di esperienze per il training.
+        Implementa una struttura dati per memorizzare e gestire le esperienze raccolte durante il training.
+
+        Ogni esperienza memorizzata è rappresentata da un namedtuple "Experience" con i seguenti campi:
+            - state: Lo stato corrente.
+            - action: L'azione eseguita.
+            - reward: La ricompensa ricevuta.
+            - next_state: Lo stato successivo risultante dall'azione.
+            - done: Flag che indica se l'episodio è terminato.
+    """
     def __init__(self, n_actions, memory_size, batch_size):
         self.n_actions = n_actions
         self.batch_size = batch_size
@@ -74,31 +69,31 @@ class ReplayBuffer:
     
 
 
-
-"""
-    @class DQN
-    @brief Classe principale per l'implementazione dell'agente di reinforcement learning
-    sulla base del concetto di Q-Learning.
-    - @c net_eval: Rete principale, che apprende la funzione Q.
-    - @c net_target: Rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
-
-    @notem La classe include i seguenti metodi:
-    - @c getAction: Selezione di un'azione.
-    - @c save2Memory: Memorizzazione delle esperienze.
-    - @c learn: Aggiornamento dei parametri della rete.
-    - @c targetUpdate: Aggiornamento dei parametri della rete obiettivo.
-
-    @param n_states: Numero di variabili di stato (dimensione dello stato di input).
-    @param n_actions: Numero di azioni possibili (dimensione dell'output della rete).
-    @param batch_size: Dimensione del batch usato durante l'addestramento.
-    @param learning_rate: Tasso di apprendimento.
-    @param learn_step: Numero di passi tra due aggiornamenti della rete.
-    @param gamma: Fattore di sconto per i futuri reward.
-    @param mem_size: Dimensione massima del replay buffer.
-    @param tau: Fattore per l'aggiornamento della rete obiettivo.
-    @param device: Dispositivo di esecuzione ("cpu" su Apple Silicon).
-"""
 class DQN:
+    """
+        Classe principale per l'implementazione dell'agente DQN.
+
+        La classe utilizza due reti neurali:
+            - net_eval: La rete principale che apprende la funzione Q.
+            - net_target: La rete obiettivo, utilizzata per calcolare i target durante l'addestramento.
+
+        Metodi principali:
+            - getAction: Seleziona un'azione in base alla politica epsilon-greedy.
+            - save2Memory: Memorizza le esperienze raccolte nel replay buffer.
+            - learn: Aggiorna i parametri della rete principale.
+            - targetUpdate: Aggiorna i parametri della rete obiettivo.
+
+        Args:
+            n_states: Numero di stati.
+            n_actions: Numero di azioni possibili.
+            batch_size: Dimensione del batch usato durante l'addestramento.
+            learning_rate: Tasso di apprendimento.
+            learn_step: Numero di passi tra due aggiornamenti della rete.
+            gamma: Fattore di sconto per i reward.
+            mem_size: Dimensione massima del replay buffer.
+            tau: Fattore per l'aggiornamento della rete obiettivo.
+            device: Dispositivo di esecuzione ("cpu" su Apple Silicon)
+    """
     def __init__(self, n_states, n_actions, batch_size=64, learning_rate=1e-4, learn_step=5, gamma=0.9, mem_size=int(1e5), tau=1e-3, device=device):
         self.n_states = n_states
         self.n_actions = n_actions

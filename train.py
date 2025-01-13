@@ -4,17 +4,19 @@ from tqdm import trange
 from api import ACTION_INDEX_LIMIT
 
 
-"""
-    @brief Restituisce le azioni valide che l'agente può compiere, in base allo stato corrente del gioco.
-
-    @param game: Oggetto che rappresenta il gioco.
-
-    @return Un elenco di azioni valide:
-    - Se i tiri sono finiti (rollLeft() == 0), ritorna un elenco delle righe non ancora completate.
-    - Se ci sono tiri rimasti, ritorna un intervallo per le azioni di rilancio.
-    - None, se non ci sono azioni valide.
-"""
 def fetch_actions(game):
+    """
+        Restituisce le azioni che l'agente può compiere, in base allo stato corrente del gioco.
+
+        Args:
+            game: Oggetto che rappresenta il gioco.
+
+        Returns:
+            list or None: Se i tiri sono finiti, può restituire:
+                - Un elenco delle righe non ancora completate.
+                - None, se non ci sono righe disponibili.
+            Se ci sono tiri rimasti, ritorna un intervallo per le azioni di rilancio.
+    """
     if game.rollLeft() == 0:
         valid_rows = []
         for i, row in enumerate(game.scorecard.keys()):
@@ -29,25 +31,7 @@ def fetch_actions(game):
 
 
 
-"""
-    @brief Funzione per l'addestramento dell'un agente DQN.
-    L'agente apprende a selezionare azioni in base allo stato del gioco e al proprio comportamento nel tempo.
-    La funzione gestisce il ciclo di episodi, il calcolo dei punteggi e l'aggiornamento della policy 
-    utilizzata (epsilon-greedy()). Supporta l'early stopping quando viene raggiunto il target di
-    punteggio medio (prima del raggiungimento degli episodi massimi) e il salvataggio del modello.
 
-    @param agent: L'agente DQN da addestrare.
-    @param game: Il gioco.
-    @param n_episodes: Numero di episodi massimi.
-    @param max_steps: Numero massimo di passi per ogni episodio.
-    @param target_score: Punteggio target.
-    @param epsilon_start: Valore iniziale di epsilon.
-    @param epsilon_end: Valore finale di epsilon.
-    @param epsilon_decay: Fattore di decadimento di epsilon ad ogni episodio.
-    @param save_model: Flag che determina se il modello deve essere salvato alla fine dell'addestramento.
-
-    @return score_history: Una lista contenente i punteggi ottenuti in tutto l'addestramento.
-"""
 def train(
         agent, 
         game, 
@@ -57,7 +41,29 @@ def train(
         epsilon_start, 
         epsilon_end, 
         epsilon_decay, 
-        save_model):
+        save_model): 
+    """
+        Funzione per l'addestramento di un agente DQN.
+
+        L'agente apprende a selezionare azioni in base allo stato del gioco e al proprio comportamento nel tempo.
+        La funzione gestisce il ciclo di episodi, il calcolo dei punteggi e l'aggiornamento della policy 
+        utilizzata (epsilon-greedy). Supporta l'early stopping quando viene raggiunto il target di
+        punteggio medio (prima del raggiungimento degli episodi massimi) e il salvataggio del modello.
+
+        Args:
+            agent: L'agente DQN da addestrare.
+            game: Il gioco da utilizzare per l'addestramento.
+            n_episodes: Numero massimo di episodi da eseguire.
+            max_steps: Numero massimo di passi per episodio.
+            target_score: Punteggio target per l'early stopping.
+            epsilon_start: Valore iniziale di epsilon (per esplorazione).
+            epsilon_end: Valore finale di epsilon.
+            epsilon_decay: Fattore di decadimento di epsilon per episodio.
+            save_model (bool): Flag che determina se il modello deve essere salvato alla fine dell'addestramento.
+
+        Returns:
+            list: Una lista contenente i punteggi ottenuti durante l'addestramento.
+    """
     
     score_history = []
     epsilon = epsilon_start
